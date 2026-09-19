@@ -1,0 +1,14 @@
+[package]
+name = "nalar"
+version = "0.1.0"
+edition = "2021"
+description = "An ML engine from scratch: training + inference, no dependencies, reproducible results."
+publish = false
+
+# Intentionally empty: the "no dependencies" claim means `std` only.
+[dependencies]
+
+[profile.release]
+# Do not add options that change float semantics. Rust stable has no
+# fast-math, but note here if the profile ever changes.
+opt-level = 3
