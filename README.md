@@ -9,7 +9,7 @@ An ML engine from scratch in Rust: full training + inference, no dependencies
 |---|---|---|
 | No dependencies | `[dependencies]` in `Cargo.toml` is empty | satisfied |
 | Gradients are correct | `tests/gradcheck.rs`: autograd vs finite differences | M1 passes |
-| Results are reproducible | `tests/golden_hash.rs`: bit-for-bit hash, compared in CI on Linux/macOS/Windows | RNG only; not yet verified across OSes |
+| Results are reproducible | `tests/golden_hash.rs`: bit-for-bit hash, compared in CI on Linux/macOS/Windows | RNG stream verified in CI, float training not yet covered |
 | Readable in one afternoon | code size (target: set a line-count budget here) | not yet measured |
 
 A claim without evidence must not be stated as fact in this README.
