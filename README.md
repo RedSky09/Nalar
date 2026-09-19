@@ -3,6 +3,8 @@
 An ML engine from scratch in Rust: full training + inference, no dependencies
 (`std` only), readable in one afternoon, with reproducible results.
 
+![ci](https://github.com/RedSky09/Nalar/actions/workflows/ci.yml/badge.svg)
+
 ## Claims, and how each one is backed
 
 | Claim | Evidence | Status |
