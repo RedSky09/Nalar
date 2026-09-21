@@ -11,7 +11,7 @@ An ML engine from scratch in Rust: full training + inference, no dependencies
 |---|---|---|
 | No dependencies | `[dependencies]` in `Cargo.toml` is empty | satisfied |
 | Gradients are correct | `tests/gradcheck.rs`, `tests/layers_gradcheck.rs`, `tests/crosscheck_scalar_ad.rs`: manual backprop vs scalar autograd vs finite differences | passes for Linear, ReLU, softmax+CE, and a full MLP (inputs and parameters) |
-| Results are reproducible | golden hashes in `tests/golden_hash.rs`, `tests/math_golden.rs`, and `tests/training.rs`, compared in CI on Linux/macOS/Windows | RNG stream verified on all three OSes. Platform libm `exp`/`ln` were shown to differ across OSes, so they were replaced by our own (`src/math.rs`). The `math` and training hashes were recorded on Linux; cross-OS confirmation is pending CI |
+| Results are reproducible | golden hashes in `tests/golden_hash.rs`, `tests/math_golden.rs`, `tests/training.rs`, and the libm probe, compared in CI on Linux/macOS/Windows | **Verified in CI** on all three OSes: the RNG stream, our own `exp`/`ln` (`src/math.rs`, 20,000 inputs each), and the weights after 200 training steps. Not covered: other compilers or CPUs (e.g. builds that enable FMA), longer training runs, f32. Platform libm `exp`/`ln` were shown to differ across OSes, which is why we do not use them in the engine |
 | An MLP learns MNIST | `cargo run --release --example mnist` | training loop verified on synthetic data only; not yet run on real MNIST |
 | Readable in one afternoon | code size (target: set a line-count budget here) | not yet measured |
 
@@ -24,7 +24,8 @@ A claim without evidence must not be stated as fact in this README.
 - [ ] M2 tensor, layers, SGD, MLP, gradchecks, IDX loader, MNIST driver
       (done); accuracy on real MNIST (pending)
 - [ ] M3 benchmark (time/epoch, peak memory)
-- [ ] M4 bit-for-bit determinism across platforms + per-layer profiler
+- [x] M4a bit-for-bit determinism across platforms (CI-verified, scope in the table above)
+- [ ] M4b per-layer profiler (time and memory per layer)
 
 ## Running
 

@@ -30,10 +30,14 @@ Cost: two code paths to maintain. Benefit: an independent reference.
   manipulation only. The loss layer uses them. `scalar_ad` (the oracle) and the
   gradcheck tests still use libm on purpose: they are references, not part of
   the claim.
-- **Not yet verified:** that our own `exp`/`ln` are bit-identical on macOS and
-  Windows. The expectation follows from IEEE-754 (basic operations are exactly
-  specified) but it is CI (`tests/math_golden.rs`, `tests/training.rs`, and the
-  "own exp/own ln" lines of the libm probe) that will confirm it.
+- **Verified in CI:** our own `exp`/`ln` are bit-identical on Linux, macOS, and
+  Windows (same toolchain, `stable`): the probe's "own exp"/"own ln" hashes
+  match on all three, and `tests/math_golden.rs`, `tests/training.rs`, and
+  `tests/golden_hash.rs` pass on all three. Scope: 20,000 inputs per function
+  and a 200-step training run. That is strong evidence, not a proof for every
+  input. The runners' CPU architectures are whatever `rustc -vV` prints in the
+  CI log; I have not independently checked them. The claim does not extend to
+  compilers or flags that enable FMA contraction, nor to f32.
 
 ## 4. Gradcheck
 Central difference, f64, h = 1e-6. Error = |a-n| / max(1, |a|, |n|).
