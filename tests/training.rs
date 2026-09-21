@@ -66,12 +66,12 @@ fn training_is_repeatable_within_one_process() {
     assert_eq!(a, b);
 }
 
-/// Golden hash of the weights after 200 training steps. This is the first test
-/// that exercises libm (`exp`/`ln` in the loss), so it is the real test of the
-/// cross-platform determinism claim. The constant was recorded on Linux only.
-/// If CI fails on another OS, that is a finding about libm, not a test bug:
-/// see docs/design.md, section 3.
-const GOLDEN_TRAINED_WEIGHTS_200_STEPS: u64 = 0xd3cb372abf8cba76;
+/// Golden hash of the weights after 200 training steps. About 80,000 `exp` calls
+/// and 200 `ln` calls (from `nalar::math`) feed into this, so it is the strongest
+/// cross-platform determinism check in the suite. Recorded on Linux only; CI
+/// compares macOS and Windows. Re-recorded when `exp`/`ln` moved from libm to
+/// `src/math.rs`, because the bits legitimately changed.
+const GOLDEN_TRAINED_WEIGHTS_200_STEPS: u64 = 0xe4926ec6e3ba85ec;
 
 #[test]
 fn trained_weights_golden() {

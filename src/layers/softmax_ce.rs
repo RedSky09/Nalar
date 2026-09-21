@@ -1,8 +1,8 @@
 //! Softmax + cross-entropy, fused (the fused gradient is simply
 //! `(softmax - onehot) / batch`), averaged over the batch.
 //!
-//! Open determinism item: this calls `exp` and `ln` from the platform libm.
-//! See docs/design.md, section 3.
+//! Uses `crate::math::{exp, ln}` instead of the platform libm, so the result is
+//! bit-identical across operating systems. See docs/design.md, section 3.
 
 use crate::tensor::Tensor;
 use crate::Real;
@@ -32,14 +32,14 @@ impl SoftmaxCrossEntropy {
             let out = &mut probs.data_mut()[i * c..(i + 1) * c];
             let mut s = 0.0;
             for (o, &z) in out.iter_mut().zip(row) {
-                let e = (z - m).exp();
+                let e = crate::math::exp(z - m);
                 *o = e;
                 s += e;
             }
             for o in out.iter_mut() {
                 *o /= s;
             }
-            total += (m + s.ln()) - row[y];
+            total += (m + crate::math::ln(s)) - row[y];
         }
         self.probs = Some(probs);
         self.labels = labels.to_vec();

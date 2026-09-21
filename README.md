@@ -3,14 +3,17 @@
 An ML engine from scratch in Rust: full training + inference, no dependencies
 (`std` only), readable in one afternoon, with reproducible results.
 
+[![ci](https://github.com/RedSky09/Nalar/actions/workflows/ci.yml/badge.svg)](https://github.com/RedSky09/Nalar/actions/workflows/ci.yml)
+
 ## Claims, and how each one is backed
 
-| Claim                     | Evidence                                                                        | Status                                 |
-| ------------------------- | ------------------------------------------------------------------------------- | -------------------------------------- |
-| No dependencies           | `[dependencies]` in `Cargo.toml` is empty                                       | satisfied                              |
-| Gradients are correct     | `tests/gradcheck.rs`: autograd vs finite differences                            | M1 passes                              |
-| Results are reproducible  | `tests/golden_hash.rs`: bit-for-bit hash, compared in CI on Linux/macOS/Windows | RNG only; not yet verified across OSes |
-| Readable in one afternoon | code size (target: set a line-count budget here)                                | not yet measured                       |
+| Claim | Evidence | Status |
+|---|---|---|
+| No dependencies | `[dependencies]` in `Cargo.toml` is empty | satisfied |
+| Gradients are correct | `tests/gradcheck.rs`, `tests/layers_gradcheck.rs`, `tests/crosscheck_scalar_ad.rs`: manual backprop vs scalar autograd vs finite differences | passes for Linear, ReLU, softmax+CE, and a full MLP (inputs and parameters) |
+| Results are reproducible | golden hashes in `tests/golden_hash.rs`, `tests/math_golden.rs`, and `tests/training.rs`, compared in CI on Linux/macOS/Windows | RNG stream verified on all three OSes. Platform libm `exp`/`ln` were shown to differ across OSes, so they were replaced by our own (`src/math.rs`). The `math` and training hashes were recorded on Linux; cross-OS confirmation is pending CI |
+| An MLP learns MNIST | `cargo run --release --example mnist` | training loop verified on synthetic data only; not yet run on real MNIST |
+| Readable in one afternoon | code size (target: set a line-count budget here) | not yet measured |
 
 A claim without evidence must not be stated as fact in this README.
 

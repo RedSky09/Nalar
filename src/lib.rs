@@ -14,6 +14,7 @@ pub mod data;
 pub mod gradcheck;
 pub mod hash;
 pub mod layers;
+pub mod math;
 pub mod mlp;
 pub mod optim;
 pub mod rng;

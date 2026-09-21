@@ -20,15 +20,20 @@ Cost: two code paths to maintain. Benefit: an independent reference.
 - Fixed reduction order (sequential summation).
 - No `-ffast-math` (not available on stable Rust); FMA only via an explicit
   `mul_add`, and until there is a conscious decision, do not use it.
-- **Open:** `exp`/`ln`/`tanh` from libm may differ across platforms.
-  Options: (a) implement them ourselves from `+ - * /`, or (b) narrow the
-  claim to "identical on a single platform". Decide before M4. Until then,
-  the main path should avoid transcendental functions (e.g. weight init uses
-  uniform, not Box-Muller).
-
-Golden tests that reach libm (`mlp_loss_and_grads_golden`,
-`trained_weights_golden`) were recorded on Linux only. CI on macOS and Windows
-is the first real test of this open item.
+- **Resolved: own `exp`/`ln`.** The platform libm gives different bits for
+  `exp`/`ln` on different operating systems. Measured with
+  `examples/libm_probe.rs` on identical inputs (20,000 each): Linux (my sandbox
+  and CI `ubuntu-latest`, which agree even though their Rust versions differ),
+  macOS, and Windows produced three different hashes for both functions. That
+  also made `trained_weights_golden` fail on macOS and Windows. Decision:
+  implement them ourselves in `src/math.rs` from `+ - * /` and integer bit
+  manipulation only. The loss layer uses them. `scalar_ad` (the oracle) and the
+  gradcheck tests still use libm on purpose: they are references, not part of
+  the claim.
+- **Not yet verified:** that our own `exp`/`ln` are bit-identical on macOS and
+  Windows. The expectation follows from IEEE-754 (basic operations are exactly
+  specified) but it is CI (`tests/math_golden.rs`, `tests/training.rs`, and the
+  "own exp/own ln" lines of the libm probe) that will confirm it.
 
 ## 4. Gradcheck
 Central difference, f64, h = 1e-6. Error = |a-n| / max(1, |a|, |n|).
@@ -60,3 +65,22 @@ and the bias gradient (rows in ascending order). `matmul_tn` and `matmul_nt`
 are bit-identical to an explicit transpose followed by `matmul`; a test pins
 this. Changing any of these orders changes the golden hashes, so treat it as a
 breaking change.
+
+## 8. Accuracy of `math::exp` and `math::ln`
+Measured on Linux against a 200-bit mpmath reference, over 180,000 inputs for
+`exp` (full range, the softmax range [-30, 0], and near zero) and 240,000 for
+`ln` (random bit patterns including subnormals, [0.5, 2], very close to 1, and
+[1, 10]):
+
+| | max error (ulp, vs true value) | inputs above 1 ulp |
+|---|---|---|
+| `math::exp` | 0.76 | 0 |
+| `math::ln` | 0.84 | 0 |
+| glibc `exp` / `ln` (for comparison) | 0.51 / 0.51 | 0 |
+
+This is a sampled measurement, not a proof of a bound. The first version of
+`ln` reached 1.95 ulp near x = 1 (rounding of `s = f/(2+f)` entered the
+leading term); it was rewritten so the exact `f` is the leading term. Unit
+tests pin a table of correctly rounded reference values (computed offline) and
+check special values (NaN, infinities, zero, subnormals, overflow and
+underflow thresholds).

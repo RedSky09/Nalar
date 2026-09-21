@@ -9,9 +9,13 @@
 //! functions: `exp` gets max-shifted logits (<= 0), `ln` gets a sum of
 //! exponentials in [1, n_classes].
 //!
+//! The last two lines hash the outputs of our own `nalar::math` on the same
+//! inputs; unlike the libm lines above, those must match on every platform.
+//!
 //! Usage: `cargo run --release --example libm_probe`
 
 use nalar::hash::hash_f64s;
+use nalar::math;
 use nalar::rng::Pcg32;
 
 const N: usize = 20_000;
@@ -30,4 +34,10 @@ fn main() {
     let l: Vec<f64> = ys.iter().map(|y| y.ln()).collect();
     println!("exp outputs:  {:#018x}   ({N} inputs in [-30, 0))", hash_f64s(&e));
     println!("ln  outputs:  {:#018x}   ({N} inputs in [1, 10))", hash_f64s(&l));
+
+    // Our own implementations (src/math.rs). These two lines must be identical on every platform.
+    let me: Vec<f64> = xs.iter().map(|&x| math::exp(x)).collect();
+    let ml: Vec<f64> = ys.iter().map(|&y| math::ln(y)).collect();
+    println!("own exp:      {:#018x}", hash_f64s(&me));
+    println!("own ln:       {:#018x}", hash_f64s(&ml));
 }
