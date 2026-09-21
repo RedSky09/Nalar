@@ -10,5 +10,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # Diagnostic: prints exp/ln output hashes so they can be compared across
+      # OSes on the SAME toolchain. Runs first so its output survives test failures.
+      - name: libm probe
+        run: |
+          rustc -vV
+          cargo run --release --locked --example libm_probe
       - run: cargo test --locked
       - run: cargo test --release --locked
