@@ -72,10 +72,40 @@ only for this code, this seed, and these hyperparameters, so any change to the
 numerics (initialisation, reduction order, `src/math.rs`) legitimately changes
 it and the value must be re-recorded.
 
-The profiler reports wall-clock time per layer (this process, this machine,
-this run — expect noise) and an estimate of memory from tensor sizes, not
-measured process RSS. `linear0` (784→128) dominates both time and memory,
-as expected: `linear1` (128→10) is more than 10x smaller in parameters.
+One run of `cargo run --release --example profile` (default: 50 batches of the
+first 3200 training images), same machine as above:
+
+| label | calls | total ms | µs/call |
+|---|---|---|---|
+| linear0.fwd | 50 | 147.7 | 2953 |
+| relu0.fwd | 50 | 4.3 | 85 |
+| linear1.fwd | 50 | 3.9 | 77 |
+| loss.fwd | 50 | 1.0 | 19 |
+| loss.bwd | 50 | 0.2 | 4 |
+| linear1.bwd | 50 | 8.3 | 167 |
+| relu0.bwd | 50 | 3.0 | 60 |
+| linear0.bwd | 50 | 446.5 | 8929 |
+| **forward total** | 50 | 166.4 | 3328 |
+| **backward total** | 50 | 463.2 | 9264 |
+
+Estimated memory at batch=64 (tensor sizes, not measured RSS): `linear0`
+803,840 bytes of parameters + 65,536 bytes of cached activations; `linear1`
+10,320 + 5,120. `linear0` accounts for over 95% of both time and memory. That
+matches what the shapes predict: `linear0`'s cost scales with
+`n_in × n_out × batch` = 784×128×64, over an order of magnitude more than
+`linear1`'s 128×10×64, and its backward pass does two matmuls of that size
+(`dW` and `dx`) against one matmul in the forward pass, which is consistent
+with `linear0.bwd` costing about 3x `linear0.fwd`.
+
+The gap between `forward_total` (166.4 ms) and the sum of its three rows
+(155.8 ms) is about 10.6 ms over 50 calls, roughly 0.2 ms/call: likely the
+`x.clone()` at the top of `forward_profiled` (401 KB per batch: 64×784 `f64`)
+plus the profiler's own bookkeeping. This has not been measured separately, so
+treat it as a plausible explanation, not a confirmed one.
+
+This is one run's wall-clock time on one machine, not a benchmark: no
+repetitions, no variance, no comparison to another implementation. That is
+milestone M3.
 
 ## Running
 
