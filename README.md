@@ -125,9 +125,50 @@ worked in (see the script's docstring for why), so, unlike every other file in
 this repo, it has not actually been run before being committed. The API it
 uses is standard, but treat its numbers as unverified until someone runs it.
 
-**Results:** not yet run. This section will hold nalar's and PyTorch's
-mean/stdev per step, and the machine they were measured on, once both have
-been run back to back on the same machine.
+**Results** (same machine as above, Windows, i5-12450H, one run of each, 200
+measured iterations after 20 warm-up):
+
+| | mean | stdev | median |
+|---|---|---|---|
+| nalar | 11.09 ms | 1.39 ms (12.5%) | 10.76 ms |
+| PyTorch 2.9.1 (float64, 1 thread) | 1.71 ms | 0.46 ms (27.3%) | 1.56 ms |
+
+**nalar is about 6.5-6.9x slower than PyTorch per step** on this machine, for
+this shape. From the FLOP count of the two matmuls (~39M/step) this is roughly
+3.6 GFLOP/s for nalar vs 25 GFLOP/s for PyTorch.
+
+Ranked, testable hypotheses for the gap, most likely first:
+1. **Compiler target.** `rustc --print cfg` on the machine that built this
+   binary shows only `sse`/`sse2` enabled, i.e. 128-bit vectors and no fused
+   multiply-add. PyTorch's CPU backend almost certainly uses a BLAS built with
+   AVX2/FMA (256-bit, multiply+add in one instruction), which alone predicts
+   up to a 4x gap and is consistent with most of what was measured. Testable:
+   rebuild with `RUSTFLAGS="-C target-cpu=native" cargo build --release` and
+   re-run `examples/bench.rs` (this only affects the binary you build with it;
+   it is not part of the checked-in build).
+2. **BLAS thread count.** `torch.set_num_threads(1)` limits PyTorch's own
+   thread pool, but the underlying BLAS library (often MKL or OpenBLAS) can
+   still use its own threads unless told not to. Not checked yet. Testable:
+   re-run with `OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+   python benches/compare_pytorch.py`; if PyTorch's numbers get slower, some
+   of its speed here came from more than one core, which this project's
+   single-thread design does not use.
+3. **No cache blocking / register tiling.** `Tensor::matmul` is a plain
+   triple loop; a real DGEMM kernel tiles the computation for the cache
+   hierarchy and unrolls the inner loop by hand. This is the part of the gap
+   I would expect to remain even after (1) and (2) are controlled for, and is
+   an inherent trade-off of "readable in one afternoon, no dependencies"
+   against a professionally engineered numerics library.
+
+I have not run (1) or (2) myself. Until they are, the 6.5-6.9x figure mixes
+all three causes and should not be read as "hand-written loops are ~7x
+slower than a BLAS", since part of it may be the build flags or thread count,
+not the algorithm.
+
+One more note: the installed PyTorch reports as `2.9.1+cu126`, a CUDA-enabled
+build rather than the CPU-only one the install command above asks for. It
+still runs the float64 CPU computation used here correctly, so the numbers
+stand; the only cost is a larger download than necessary.
 
 ## Running
 

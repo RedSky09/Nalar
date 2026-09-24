@@ -114,3 +114,12 @@ autograd overhead; it answers "would PyTorch be faster for a model this small
 on this machine", not "which matmul kernel is faster". Both scripts use
 float64 and one thread to match nalar's current core (see section 5); revisit
 if nalar ever gains f32 or multithreading.
+
+## 11. Open: the nalar-vs-PyTorch speed gap
+Measured once (see README, M3): nalar is 6.5-6.9x slower than PyTorch
+(float64, 1 thread) for one training step of the 784-128-10 MLP on one
+Windows machine. Three ranked, not-yet-tested hypotheses are recorded in the
+README's M3 section: compiler target (no AVX2/FMA by default), BLAS thread
+count (may not actually be 1), and the lack of cache blocking in
+`Tensor::matmul`. Re-measure with `RUSTFLAGS="-C target-cpu=native"` and with
+BLAS thread env vars pinned before attributing the gap to the algorithm.
