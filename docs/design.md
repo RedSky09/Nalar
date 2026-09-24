@@ -88,3 +88,14 @@ leading term); it was rewritten so the exact `f` is the leading term. Unit
 tests pin a table of correctly rounded reference values (computed offline) and
 check special values (NaN, infinities, zero, subnormals, overflow and
 underflow thresholds).
+
+## 9. Profiler (`src/profile.rs`)
+Timing via `Instant`, no dependencies. Deliberately does NOT measure process
+memory (RSS): `std` has no portable call for that, and a platform-specific one
+would break the "no dependencies, one afternoon" scope. `memory_report`
+instead sums tensor byte sizes (parameters + cached forward activations) from
+`Tensor::len()`, which is exact for what the engine allocates but excludes
+allocator overhead, the input tensor, and the loss layer. `forward_profiled` /
+`backward_profiled` are separate methods, checked to be bit-identical to
+`forward` / `backward` (see `mlp::tests`), so profiling cannot silently change
+a training run's numerics.

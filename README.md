@@ -24,7 +24,7 @@ A claim without evidence must not be stated as fact in this README.
 - [x] M2 tensor, layers, SGD, MLP, gradchecks, IDX loader, MNIST driver; 96.74% test accuracy on real MNIST (see Results)
 - [ ] M3 benchmark (time/epoch, peak memory)
 - [x] M4a bit-for-bit determinism across platforms (CI-verified, scope in the table above)
-- [ ] M4b per-layer profiler (time and memory per layer)
+- [x] M4b per-layer profiler: `cargo run --release --example profile [DATA_DIR] [N_BATCHES]`
 
 ## Results
 
@@ -71,6 +71,11 @@ the MNIST files. Anyone with the same four data files can check it: it holds
 only for this code, this seed, and these hyperparameters, so any change to the
 numerics (initialisation, reduction order, `src/math.rs`) legitimately changes
 it and the value must be re-recorded.
+
+The profiler reports wall-clock time per layer (this process, this machine,
+this run — expect noise) and an estimate of memory from tensor sizes, not
+measured process RSS. `linear0` (784→128) dominates both time and memory,
+as expected: `linear1` (128→10) is more than 10x smaller in parameters.
 
 ## Running
 

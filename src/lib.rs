@@ -17,6 +17,7 @@ pub mod layers;
 pub mod math;
 pub mod mlp;
 pub mod optim;
+pub mod profile;
 pub mod rng;
 pub mod scalar_ad;
 pub mod tensor;

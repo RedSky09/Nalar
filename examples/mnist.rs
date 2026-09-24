@@ -6,6 +6,7 @@
 //!   t10k-images-idx3-ubyte,  t10k-labels-idx1-ubyte
 
 use nalar::data::{parse_idx, Dataset};
+use nalar::hash::hash_f64s;
 use nalar::layers::SoftmaxCrossEntropy;
 use nalar::mlp::Mlp;
 use nalar::optim::Sgd;
@@ -70,4 +71,7 @@ fn main() {
             t0.elapsed().as_secs_f64()
         );
     }
+    // Bit-level fingerprint of the trained weights: identical inputs, seed, and
+    // code must print the same value on every machine.
+    println!("final weights hash: {:#018x}", hash_f64s(&mlp.flat_params()));
 }

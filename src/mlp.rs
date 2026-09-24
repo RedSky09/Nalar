@@ -3,6 +3,7 @@
 //! (`SoftmaxCrossEntropy`), so the model can be used for inference alone.
 
 use crate::layers::{Linear, Relu};
+use crate::profile::{bytes_f64, Profiler};
 use crate::rng::Pcg32;
 use crate::tensor::Tensor;
 use crate::Real;
@@ -73,6 +74,60 @@ impl Mlp {
             d = self.linears[i].backward(&d);
         }
         d
+    }
+
+    /// Same computation as `forward`, timing each layer into `prof` under
+    /// labels `"linear{i}.fwd"` / `"relu{i}.fwd"`. Adds `Instant::now()`
+    /// overhead per layer per call; for the batch sizes in `examples/mnist.rs`
+    /// that overhead was negligible relative to the work, but it has not been
+    /// measured at very small batch sizes.
+    pub fn forward_profiled(&mut self, x: &Tensor, prof: &mut Profiler) -> Tensor {
+        let last = self.linears.len() - 1;
+        let mut h = x.clone();
+        for i in 0..self.linears.len() {
+            let l = &mut self.linears[i];
+            h = prof.time(format!("linear{i}.fwd"), || l.forward(&h));
+            if i < last {
+                let r = &mut self.relus[i];
+                h = prof.time(format!("relu{i}.fwd"), || r.forward(&h));
+            }
+        }
+        h
+    }
+
+    /// Same computation as `backward`, timing each layer into `prof` under
+    /// labels `"linear{i}.bwd"` / `"relu{i}.bwd"`.
+    pub fn backward_profiled(&mut self, dlogits: &Tensor, prof: &mut Profiler) -> Tensor {
+        let last = self.linears.len() - 1;
+        let mut d = dlogits.clone();
+        for i in (0..self.linears.len()).rev() {
+            if i < last {
+                let r = &mut self.relus[i];
+                d = prof.time(format!("relu{i}.bwd"), || r.backward(&d));
+            }
+            let l = &mut self.linears[i];
+            d = prof.time(format!("linear{i}.bwd"), || l.backward(&d));
+        }
+        d
+    }
+
+    /// Estimated bytes for parameters (fixed) and forward-pass activations
+    /// (depends on `batch`), per layer. See `profile::bytes_f64`: this is a
+    /// size estimate from tensor shapes, not measured process memory, and it
+    /// does not include the input `x` itself or the loss layer.
+    pub fn memory_report(&self, batch: usize) -> String {
+        let mut out = String::new();
+        out.push_str(&format!("{:<10} {:>14} {:>18}\n", "layer", "params_bytes", "activation_bytes"));
+        let (mut p_total, mut a_total) = (0usize, 0usize);
+        for (i, l) in self.linears.iter().enumerate() {
+            let pbytes = bytes_f64(l.w.len() + l.b.len());
+            let abytes = bytes_f64(batch * l.b.len()); // output of this layer, cached for backward
+            p_total += pbytes;
+            a_total += abytes;
+            out.push_str(&format!("linear{i:<3} {:>14} {:>18}\n", pbytes, abytes));
+        }
+        out.push_str(&format!("{:<10} {:>14} {:>18}\n", "TOTAL", p_total, a_total));
+        out
     }
 
     /// Argmax over classes for each row (ties resolve to the lowest index).
@@ -159,5 +214,44 @@ mod tests {
         let mut m = Mlp::from_flat_params(&[2, 2], &[w.data(), &[0.0, 0.0]].concat());
         let x = Tensor::from_vec(&[3, 2], vec![1.0, 2.0, 5.0, 4.0, 3.0, 3.0]);
         assert_eq!(m.predict(&x), vec![1, 0, 0]);
+    }
+
+    #[test]
+    fn profiled_forward_and_backward_match_unprofiled() {
+        let sizes = [4, 6, 3];
+        let p = Mlp::new(&sizes, &mut Pcg32::new(1, 1)).flat_params();
+        let mut a = Mlp::from_flat_params(&sizes, &p);
+        let mut b = Mlp::from_flat_params(&sizes, &p);
+        let x = Tensor::from_vec(&[5, 4], (0..20).map(|i| i as Real * 0.07 - 0.6).collect());
+
+        let y_plain = a.forward(&x);
+        let mut prof = Profiler::new();
+        let y_prof = b.forward_profiled(&x, &mut prof);
+        assert_eq!(y_plain, y_prof, "profiled forward must be bit-identical to forward");
+
+        let dy = Tensor::from_vec(y_plain.shape(), (0..y_plain.len()).map(|i| i as Real * 0.03 - 0.1).collect());
+        let dx_plain = a.backward(&dy);
+        let dx_prof = b.backward_profiled(&dy, &mut prof);
+        assert_eq!(dx_plain, dx_prof, "profiled backward must be bit-identical to backward");
+        assert_eq!(a.flat_grads(), b.flat_grads());
+
+        for i in 0..sizes.len() - 1 {
+            assert!(prof.total_ms(&format!("linear{i}.fwd")).is_some());
+            assert!(prof.total_ms(&format!("linear{i}.bwd")).is_some());
+        }
+    }
+
+    #[test]
+    fn memory_report_scales_with_batch() {
+        let m = Mlp::new(&[10, 20, 5], &mut Pcg32::new(2, 2));
+        let r1 = m.memory_report(1);
+        let r32 = m.memory_report(32);
+        assert!(r1.contains("linear0"));
+        // Activation bytes should be exactly 32x larger for linear0 (batch * n_out * 8).
+        let bytes_for = |report: &str, layer: &str| -> usize {
+            report.lines().find(|l| l.starts_with(layer)).unwrap()
+                .split_whitespace().nth(2).unwrap().parse().unwrap()
+        };
+        assert_eq!(bytes_for(&r32, "linear0"), bytes_for(&r1, "linear0") * 32);
     }
 }
