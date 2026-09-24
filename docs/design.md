@@ -99,3 +99,18 @@ allocator overhead, the input tensor, and the loss layer. `forward_profiled` /
 `backward_profiled` are separate methods, checked to be bit-identical to
 `forward` / `backward` (see `mlp::tests`), so profiling cannot silently change
 a training run's numerics.
+
+## 10. Benchmark methodology (`examples/bench.rs`, `benches/compare_pytorch.py`)
+One fixed synthetic batch, generated once outside the timed region and reused
+every iteration (only the weights change, as in real training): this isolates
+the cost of the operations (matmul, ReLU, softmax+CE, SGD) from data loading
+and from any change in the computation as training progresses. A warm-up phase
+is discarded before timing. Statistics are population mean/stdev/min/median/max
+over the measured iterations, computed with only `std` (Rust) or the standard
+library (Python); no external stats package.
+
+The PyTorch comparison necessarily includes PyTorch's own per-step Python and
+autograd overhead; it answers "would PyTorch be faster for a model this small
+on this machine", not "which matmul kernel is faster". Both scripts use
+float64 and one thread to match nalar's current core (see section 5); revisit
+if nalar ever gains f32 or multithreading.

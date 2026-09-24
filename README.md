@@ -104,8 +104,30 @@ plus the profiler's own bookkeeping. This has not been measured separately, so
 treat it as a plausible explanation, not a confirmed one.
 
 This is one run's wall-clock time on one machine, not a benchmark: no
-repetitions, no variance, no comparison to another implementation. That is
-milestone M3.
+repetitions, no variance, no comparison to another implementation. M3 below
+covers that.
+
+## M3: benchmark
+
+    cargo run --release --example bench [N_ITERS] [WARMUP]     # this engine
+    python benches/compare_pytorch.py [N_ITERS] [WARMUP]        # PyTorch, for comparison
+
+Both run the same shape (784-128-10, ReLU, batch 64, float64, single thread)
+on one fixed synthetic batch, with a warm-up phase discarded before timing, and
+report mean/stdev/min/median/max over many repetitions. For a fair comparison,
+run both back to back on the same machine. `benches/compare_pytorch.py` needs
+`pip install torch --index-url https://download.pytorch.org/whl/cpu` (the
+CPU-only build; the default `pip install torch` pulls a large set of CUDA
+packages you don't need for this).
+
+**Caveat on the PyTorch script:** I could not install PyTorch in the sandbox I
+worked in (see the script's docstring for why), so, unlike every other file in
+this repo, it has not actually been run before being committed. The API it
+uses is standard, but treat its numbers as unverified until someone runs it.
+
+**Results:** not yet run. This section will hold nalar's and PyTorch's
+mean/stdev per step, and the machine they were measured on, once both have
+been run back to back on the same machine.
 
 ## Running
 
