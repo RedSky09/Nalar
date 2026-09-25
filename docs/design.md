@@ -68,7 +68,11 @@ from 0.0: all three matmul variants, the bias addition (after the inner sum),
 and the bias gradient (rows in ascending order). `matmul_tn` and `matmul_nt`
 are bit-identical to an explicit transpose followed by `matmul`; a test pins
 this. Changing any of these orders changes the golden hashes, so treat it as a
-breaking change.
+breaking change. (A 4x4 register-tiled version of the three `matmul*` methods
+was tried and reverted; see section 11. It preserved this exact order -- every
+golden hash passed with unchanged constants both when it was introduced and
+when it was reverted -- so the tiling episode never put reproducibility at
+risk. It was reverted because it measured slower, not because it was wrong.)
 
 ## 8. Accuracy of `math::exp` and `math::ln`
 Measured on Linux against a 200-bit mpmath reference, over 180,000 inputs for
@@ -115,11 +119,34 @@ on this machine", not "which matmul kernel is faster". Both scripts use
 float64 and one thread to match nalar's current core (see section 5); revisit
 if nalar ever gains f32 or multithreading.
 
-## 11. Open: the nalar-vs-PyTorch speed gap
-Measured once (see README, M3): nalar is 6.5-6.9x slower than PyTorch
-(float64, 1 thread) for one training step of the 784-128-10 MLP on one
-Windows machine. Three ranked, not-yet-tested hypotheses are recorded in the
-README's M3 section: compiler target (no AVX2/FMA by default), BLAS thread
-count (may not actually be 1), and the lack of cache blocking in
-`Tensor::matmul`. Re-measure with `RUSTFLAGS="-C target-cpu=native"` and with
-BLAS thread env vars pinned before attributing the gap to the algorithm.
+## 11. The nalar-vs-PyTorch speed gap
+Measured (see README, M3) on one Windows machine (i5-12450H), one training
+step of the 784-128-10 MLP:
+- Default build, PyTorch with `torch.set_num_threads(1)` only: nalar 6.5x
+  slower (11.09 ms vs 1.71 ms).
+- `-C target-cpu=native` (enables AVX2/FMA on that machine): nalar drops to
+  6.65 ms, narrowing the gap to 3.9x against the same PyTorch number.
+- Pinning `OMP_NUM_THREADS`/`MKL_NUM_THREADS`/`OPENBLAS_NUM_THREADS=1` made
+  PyTorch itself ~2x FASTER (0.83 ms), the opposite of what "hypothesis 2"
+  predicted: for a matrix this small, PyTorch's BLAS spawning more than one
+  thread apparently cost more in overhead than it gained. Against this truer
+  single-thread PyTorch number, nalar (native, naive matmul) is 8.0x slower.
+- **Tried and reverted: 4x4 register tiling for `Tensor::matmul` /
+  `matmul_tn` / `matmul_nt`.** Verified bit-identical to the naive loops (see
+  section 7) both when introduced and when reverted -- every golden hash
+  passed throughout, unchanged. Measured on the i5-12450H with
+  `target-cpu=native`, three clean runs (stdev 3-5% of the mean, so not
+  noise): 7.52-7.61 ms, about 14% SLOWER than the naive loops' 6.65 ms. Likely
+  explanation, not confirmed: the naive loop's simple, contiguous access
+  pattern (`for j in 0..n { c[j] += a * b[j] }`) is easy for LLVM to
+  auto-vectorize into wide AVX2/FMA instructions; the tiled version's nested
+  loops over small fixed-size accumulator arrays (`acc[4][4]`) with
+  runtime-variable bounds at tile edges are more likely to defeat that
+  auto-vectorization, so the "optimization" traded away something the
+  compiler was already doing well. Reverted to the naive loops, which remain
+  the fastest configuration measured (6.65 ms, `target-cpu=native`, 8.0x
+  slower than PyTorch's true single-thread number).
+- Not attempted: hand-written SIMD (`unsafe`, outside this project's stated
+  scope so far), or a real BLAS-style blocking scheme validated by profiling
+  the generated assembly rather than guessing. Either could plausibly do
+  better than the reverted attempt, but neither has been tried.

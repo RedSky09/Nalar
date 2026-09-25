@@ -170,6 +170,22 @@ build rather than the CPU-only one the install command above asks for. It
 still runs the float64 CPU computation used here correctly, so the numbers
 stand; the only cost is a larger download than necessary.
 
+**Hypothesis 3, tested and reverted: cache/register blocking.**
+`Tensor::matmul` (and `matmul_tn`, `matmul_nt`) were rewritten to use 4x4
+register tiling instead of a plain triple loop, verified bit-identical to the
+old naive loops (every golden hash above still passed, with its original,
+unchanged constant, both when tiling was introduced and when it was
+reverted). Measured on the i5-12450H with `target-cpu=native` (`cargo clean`
++ rebuild, confirmed fresh; three consecutive runs, 2.9-5.4% stdev): **7.52 to
+7.61 ms, about 14% slower than the naive loops' 6.65 ms** -- the opposite of
+the intended effect. Likely reason (not confirmed): the naive loop's simple
+contiguous access pattern is easy for the compiler to auto-vectorize into
+AVX2/FMA instructions on its own; the tiled version's more complex, fixed-size
+accumulator-array code plausibly defeats that. **Reverted.** The naive loops
+remain the fastest configuration measured. See docs/design.md, section 11,
+for the full account, including what wasn't tried (hand-written SIMD, a
+profiled BLAS-style blocking scheme).
+
 ## Running
 
     cargo test

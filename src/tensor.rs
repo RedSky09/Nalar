@@ -106,8 +106,9 @@ impl Tensor {
         Tensor::from_vec(&[n, m], out)
     }
 
-    /// `self · b` for `[m,k] · [k,n]`. Each output element is a sequential sum
-    /// over k in ascending order, starting from 0.0.
+    /// `self · b` for `[m,k] · [k,n]`. A plain triple loop: see
+    /// docs/design.md, section 11, for why (4x4 register tiling was tried and
+    /// measured slower on real AVX2/FMA hardware, so it was reverted).
     pub fn matmul(&self, b: &Tensor) -> Tensor {
         let (m, k) = self.dims2();
         let (k2, n) = b.dims2();
